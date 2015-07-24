@@ -1,0 +1,64 @@
+     =========================================================
+     Geant4 - an Object-Oriented Toolkit for Simulation in HEP
+     =========================================================
+
+                      Category History file
+                      ---------------------
+
+History file for Geant4 CMake build scripts.
+It DOES NOT substitute the SVN log-message one should put at every
+committal in the SVN repository !
+
+Entries MUST use the following format:
+
+
+MONTH DAY YEAR - INITIAL.SURNAME (TAG)
+- FILECHANGED : Document changes made.
+
+- OTHERFILECHANGED : Document changes made.
+
+
+You should keep two lines between each date.
+TAG is optional. If your changes fix a bug listed in the Geant4 Bugzilla,
+add this in the documentation for the changed file as [BUGFIX #BUGNUMBER].
+
+
+     ----------------------------------------------------------
+     * Reverse chronological order (last date on top), please *
+     ----------------------------------------------------------
+
+18/02/2015 Andrea Dotti   (stattest-V10-01-00)
+For merged file, name is now random to allow
+for multiple tests to run in the same directory
+
+10/10/2014 Andrea Dotti   (stattest-V10-00-03)
+Bug fixing for ntuple testing
+If Binned or UnBinned configuration sections miss
+automatically disable checking in this part
+Introduced optional merging of multiple input files.
+If input file contains the '*' character these will be merged.
+
+18/06/2014 Davide Mancusi (stattest-V10-00-02)
+Add per-histogram and per-branch configuration options for logx/logy plots
+Chi2 test returns UNDEFINED if no degrees of freedom are present
+Print date/time of the StatTest run
+
+17/06/2014 Andrea Dotti (stattest-V10-00-00,stattest-V10-00-01)
+Add legend for colors in graphics output Blue: input, Red: reference
+
+20/02/2013 Andrea Dotti (stattest-V09-06-00)
+Now count only FAILED tests for CTest failure
+
+09/05/2012 Andrea Dotti (stattest-V09-05-03)
+Adding example file to test all histograms of ROOT file.
+
+08/01/2012 Andrea Dotti (stattest-V09-05-02)
+ANSI colors for output are now off by default, can be turned
+on with --colors option (needed for CDash that does not support ANSI chars)
+
+07/13/2012 Andrea Dotti (stattest-V09-05-01)
+Reducing ROOT verbosity
+
+07/10/2012 Andrea Dotti (stattest-V09-05-00)
+Initial import
+
