@@ -3,7 +3,7 @@
 
 import sys
 def usage():
-    print 'Usage: runtests.py [-h] [-V] [--list] [--colors] [-g pdfname] conffile inputfile [referencefile]'
+    print 'Usage: runtests.py [-h] [-V] [--list] [--colors] [-g pdfname] [-H -T] conffile inputfile referencefile'
     print ' Performs statistical tests for distributions contained in inputfile'
     print ' tests are configured in conffile'
     print '    conffile : configuration file'
@@ -33,14 +33,17 @@ def run( argv = sys.argv ):
     if len(argv)>=1:
         import getopt
         try:
-            opts,args = getopt.getopt( argv ,"hvVg:",["list","colors"])
+            opts,args = getopt.getopt( argv ,"hvVTg:H",["list","colors"])
         except getopt.GetoptError,err:
             sys.stderr.write( str(err) )
             usage()
             sys.exit(2)
             
-        doplots = "report.pdf"
+#t        doplots = "report.pdf" 
+        doplots = None
+        input = "HISTOS"
         for op,ar in opts:
+#            print("OP %s AR %s"%(op,ar)) 
             if op == '-h':
                 usage()
                 sys.exit(0)
@@ -57,6 +60,10 @@ def run( argv = sys.argv ):
                 colors = True
             elif op == '-g':
                 doplots=ar
+            elif op == '-T':
+                input = "TEXT"
+            elif op == '-H':
+                input = "HISTOS"
         if len(args)>=2:
             inputfile=args[1]
             if '*' in args[1]:
@@ -70,9 +77,16 @@ def run( argv = sys.argv ):
                 inputfile=filename
             try:
                 if len(args)>=3:
-                    errcode = runROOT( args[0],inputfile , doPlots = doplots , defaultReferenceFile = args[2] , useColorsForOutput = colors)
+                    if input == "TEXT" :
+                        errcode = runROOT( args[0] ,inputfile , doPlots = None , doText = True , doHistos = False , doUnBinned = False , defaultReferenceFile = args[2] ) 
+                    else :
+                        errcode = runROOT( args[0], inputfile , doPlots = doplots , doText = False , defaultReferenceFile = args[2] , useColorsForOutput = colors)
                 else:
-                    errcode = runROOT( args[0] ,inputfile ,doPlots = doplots , useColorsForOutput = colors)
+                    if input == "TEXT" :
+                        sys.stderr.write("Error: NO REFERENCE FILE %s\n")
+                        sys.exit(1)
+                    else:
+                        errcode = runROOT( args[0] , inputfile , doPlots = doplots , useColorsForOutput = colors)
             except Exception,e:
                 sys.stderr.write("Error: %s\n"%e)
                 sys.exit(1)

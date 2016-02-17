@@ -1,7 +1,8 @@
 """
 ROOT interfaces and utilities
 """
-from Utils import WrongDataType
+from Utils import WrongDataType,Error,logger
+_logger=logger().getLogger('Interface')
 
 def stripPathName( aPath ):
     """
@@ -97,7 +98,7 @@ def buildHistogramInputs( tfile, paths ):
     return inputs
 
 def makePage( algorithm , pagename , prefix=""):
-    from ROOT import TCanvas,kBlue,kRed,gROOT,kGreen,kYellow,kGray
+    from ROOT import TCanvas,kBlue,kRed,gROOT,kGreen,kYellow,kBlack
     gROOT.SetBatch(True)
     c=TCanvas( algorithm.output.name , algorithm.output.name )
     c.Divide(1,2)
@@ -110,7 +111,7 @@ def makePage( algorithm , pagename , prefix=""):
     if algorithm.output.result == Result.SUCCESS:
         aColor = kGreen
     if algorithm.output.result == Result.UNDEFINED:
-        aColor = kGray
+        aColor = kBlack
     if aColor:
         c.SetFillColor( aColor )
     aPad = c.cd(1)
@@ -119,6 +120,7 @@ def makePage( algorithm , pagename , prefix=""):
     if algorithm.output.logy:
         aPad.SetLogy()
     from Utils import draw
+    _logger.info("Printing report..2.")
     lims = ()
     if "TH1" not in algorithm.test.dataset1.__class__.__name__:
         lims = ( 100, 

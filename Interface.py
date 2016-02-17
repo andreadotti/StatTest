@@ -1,4 +1,6 @@
 from Utils import Error,logger
+import math
+import sys
 
 _logger=logger().getLogger('Interface')
 class Result:
@@ -106,6 +108,7 @@ class ConfigurationError(Error):
     def __init__(self,msg):
         Error.__init__(self,"Configuration Error: %s"%msg)
         
+from Utils import SplitLine 
 class Configuration:
     """
     """
@@ -125,6 +128,16 @@ class Configuration:
     TYPEKEY = 'Type'
     SIZEKEY = 'Size'
     ELEMENTKEY = 'Element'
+    TEXTKEY = 'Text'
+    LINESKEY = 'Lines'
+    WORDSKEY = 'Words'
+    VALUECOLKEY = 'ValueCol'
+    VALUEREFKEY = 'ValueRef'
+    VALUEKEY = 'Value'
+    ERRORCOLKEY = 'ErrorCol'
+    ERRORREFKEY = 'ErrorRef'
+    ERRORKEY = 'Error'
+    ERRORTYPEKEY = 'ErrorType'
     def __init__(self,confile):
         _logger.debug('Creating Configuration instance for file: %s'%confile)
         self.filename = confile
@@ -134,6 +147,208 @@ class Configuration:
         except Exception,e:
             raise ConfigurationError("Error reading configuration file %s: %s"%(self.filename,str(e)))
 
+    def parseAndCheckText(self):
+        """
+        Check configuration for Binned distributions
+        """
+        _logger.debug("Checking configuration syntax for 'Text'")
+        if not self.configuration.has_key(Configuration.TEXTKEY):
+            _logger.debug("No 'Binned' configuration, nothing to do")
+            return
+        self.text=self.configuration[Configuration.TEXTKEY]
+        if type(self.text)!=type(dict()):
+            raise ConfigurationError("Text block should be of type dict")
+        #If not specified, add defaults placeholders
+        if not self.text.has_key(Configuration.DEFAULTTESTKEY):
+            self.text[Configuration.DEFAULTTESTKEY]=None
+        if not self.text.has_key(Configuration.DEFAULTREFKEY):
+            self.text[Configuration.DEFAULTREFKEY]=None
+        if not self.text.has_key(Configuration.DEFAULTTHRESHOLDSKEY):
+            self.text[Configuration.DEFAULTTHRESHOLDSKEY]=None
+        else:
+            if type(self.text[Configuration.DEFAULTTHRESHOLDSKEY])!=type(list()) or \
+                len(self.text[Configuration.DEFAULTTHRESHOLDSKEY])!=2:
+                raise ConfigurationError("Thresholds should be a list of size 2")
+        if not self.text.has_key(Configuration.LINESKEY):
+            raise ConfigurationError("Text block should have a %s variable"%Configuration.LINESKEY)
+        if type(self.text[Configuration.LINESKEY])!=type(list()):
+            raise ConfigurationError("%s variable should be of type list"%Configuration.LINESKEY)
+        if len(self.text[Configuration.LINESKEY])==0:
+            raise ConfigurationError("Text variable should contain at least one dictionary")
+        for elem in self.text[Configuration.LINESKEY]:
+            if type(elem)!=type(dict()):
+                raise ConfigurationError("Text element %s should be of type dictionary"%elem)
+            if elem.has_key(Configuration.THRESHOLDSKEY):
+                if type(elem[Configuration.THRESHOLDSKEY])!=type(list()) or \
+                    len(elem[Configuration.THRESHOLDSKEY])!=2:
+                    raise ConfigurationError("Thresholds should be a list of size 2")
+            if not elem.has_key(Configuration.WORDSKEY):
+                raise ConfigurationError("Text element %s should have at least %s key"%(elem,Configuration.WORDSKEY))
+#            if elem.has_key(Configuration.WORDSKEY):
+#                if type(elem[Configuration.WORDSKEY])!=type(list()) :
+# or \
+#                    len(elem[Configuration.WORDSKEY])%2!=2:
+#                    raise ConfigurationError(Words should be a list of size even")
+            if not elem.has_key(Configuration.VALUECOLKEY):
+                raise ConfigurationError("Text element %s should have at least %s key"%(elem,Configuration.VALUECOLKEY))
+#            if not elem.has_key(Configuration.ERRORCOLKEY) and not elem.has_key(Configuration.ERRORTYPEKEY):
+#                raise ConfigurationError("Text element %s should have at least %s or %s key"%(elem,Configuration.ERRORCOLKEY + Configuration.ERRORTYPEKEY))
+#                raise ConfigurationError("Text element %s should have at least %s or %s key"%(elem,Configuration.ERRORCOLKEY,Configuration.ERRORTYPEKEY))
+        _logger.debug("Configuration syntax for '%s' checked and passed"%Configuration.TEXTKEY) 
+
+    def fillRefData(self,fileNameRef) : 
+#        fileNameRef = self.text[Configuration.REFERENCEKEY]
+        _logger.debug("START fillRefData %s RR"% fileNameRef)
+        self.theNEventsRef = 0
+        try:
+            fin = open(fileNameRef)
+        except IOError as e:
+            sys.stderr.write("!!! No such file %s\n"%fileNameRef)
+            sys.exit(1)
+#            print "I/O error({0}): {1}".format(e.errno, e.strerror)
+      # check file exists
+        lines = fin.readlines()
+        for line in lines:
+            line = line.lstrip()
+            _logger.debug("@@@ check line: %s "% line )
+            words = SplitLine(line)
+#--- check if it correspond to one line
+            for dline in self.text[Configuration.LINESKEY] :
+#                _logger.debug("line value %s "% dline[Configuration.VALUECOLKEY] ) 
+                dwords =  dline[Configuration.WORDSKEY] 
+#                _logger.debug("len WORDS %s "% len(dwords) )
+                bLineOK = 1
+                if type(dwords)!=type(dict()):
+                    _logger.debug("WORD IS NOT DICT")
+                for dwordk in dwords :
+#                    for dwork in dwords:
+                    if dwordk < 0 or dwordk >= len(words) :
+                        bLineOK = 0
+                        break
+                    _logger.debug("WORDDATA CHK %s = %s"% (words[dwordk-1],dline[Configuration.WORDSKEY][dwordk]))
+                    if words[dwordk-1] <> dline[Configuration.WORDSKEY][dwordk] : 
+                        bLineOK = 0
+                        break
+                if bLineOK :
+                    _logger.debug("REF FILE: LINE MATCHES CONFIGURATION: %s "% line)
+                    if dline[Configuration.VALUECOLKEY] > len(words)  :
+                        raise ConfigurationError("Line too short to get reference value , %s < %s "%(len(words),dline [Configuration.VALUECOLKEY]) )
+                    dline['ValueRef'] = words[ dline[Configuration.VALUECOLKEY]-1 ].rstrip()
+                    if dline[Configuration.ERRORTYPEKEY] == "ABS" : 
+                        if dline[Configuration.ERRORCOLKEY] > len(words)  :
+                            raise ConfigurationError("Line too short to get reference error , %s < %s "%(len(words),dline [Configuration.ERRORCOLKEY] ))
+                        dline['ErrorRef'] = words[ dline[Configuration.ERRORCOLKEY]-1 ].rstrip()
+                    elif dline[Configuration.ERRORTYPEKEY] == "REL" : 
+                        if dline[Configuration.ERRORCOLKEY] > len(words)  :
+                            raise ConfigurationError("Line too short to get reference error , %s < %s "%(len(words),dline [Configuration.ERRORCOLKEY] ))
+                        dline['ErrorRef'] = float(words[ dline[Configuration.ERRORCOLKEY]-1 ])*float(dline['ValueRef'].rstrip())
+                    elif dline[Configuration.ERRORTYPEKEY] == "REL100" : 
+                        if dline[Configuration.ERRORCOLKEY] > len(words)  :
+                            raise ConfigurationError("Line too short to get reference error , %s < %s "%(len(words),dline [Configuration.ERRORCOLKEY] ))
+                        dline['ErrorRef'] = float(words[ dline[Configuration.ERRORCOLKEY]-1 ])*float(dline['ValueRef'].rstrip())/100.
+                    elif dline[Configuration.ERRORTYPEKEY] == "RELFIX" : 
+                        if dline[Configuration.ERRORCOLKEY] > len(words)  :
+                            raise ConfigurationError("Line too short to get reference error , %s < %s "%(len(words),dline [Configuration.ERRORCOLKEY] ))
+                        dline['ErrorRef'] = float(dline[Configuration.ERRORCOLKEY])*float(dline['ValueRef'].rstrip())
+                    else : 
+                        raise ConfigurationError("Error type is not valid: %s it should be 'ABS', 'REL', 'REL100' or 'RELFIX'"%dline[Configuration.ERRORTYPEKEY] )
+
+#### Read text file and check if lines defined by configuration are found
+    def readTextFile( self, aFileName):
+        _logger.debug("START readTextFile %s"% aFileName)
+        try:
+            fin = open(aFileName)
+        except IOError as e:
+            # check file exists
+            sys.stderr.write("!!! No such file %s\n"%aFileName)
+            sys.exit(1)
+        lines = fin.readlines()
+        for line in lines:
+            line = line.lstrip()
+            _logger.debug("@@@ check line %s "% line )
+            words = SplitLine(line)
+            _logger.debug("checking len words %f "% len(words))
+            for word1 in words :
+                _logger.debug("checking words %s "% word1)
+#--- check if it correspond to one line
+            for dline in self.text[Configuration.LINESKEY] :
+                _logger.debug("checking dline %s "% dline)
+                dwords = dline[Configuration.WORDSKEY] 
+            #                _logger.debug("len WORDS %s "% len(dwords) )
+                bLineOK = 1
+                if type(dwords)!=type(dict()):
+                    _logger.debug("WORD IS NOT DICT")
+                for dwordk in dwords :
+                    _logger.debug("checking dword %s : %s "% (dwordk,dline[Configuration.WORDSKEY][dwordk]))
+                    if dwordk < 0 or dwordk >= len(words) :
+                        bLineOK = 0
+                        break
+                    _logger.debug("TWORDDATA CHK %s = %s"% (words[dwordk-1],dline[Configuration.WORDSKEY][dwordk]))
+                    if words[dwordk-1] <> dline[Configuration.WORDSKEY][dwordk] : 
+                        bLineOK = 0
+                        break
+                if bLineOK :
+                    _logger.debug("TEXT FILE: LINE MATCHES CONFIGURATION: %s "% line)
+                    if dline[Configuration.VALUECOLKEY] > len(words)  :
+                        raise ConfigurationError("Line too short to get reference value , %s < %s "%(len(words),dline [Configuration.VALUECOLKEY]) )
+                    dline['Value'] = words[ dline[Configuration.VALUECOLKEY]-1 ].rstrip()
+                    if dline[Configuration.ERRORTYPEKEY] == "ABS" : 
+                       if dline[Configuration.ERRORCOLKEY] > len(words)  :
+                           raise ConfigurationError("Line too short to get reference error , %s < %s "%(len(words),dline [Configuration.ERRORCOLKEY] ))
+                       dline['Error'] = words[ dline[Configuration.ERRORCOLKEY]-1 ].rstrip()
+                    elif dline[Configuration.ERRORTYPEKEY] == "REL" : 
+                        if dline[Configuration.ERRORCOLKEY] > len(words)  :
+                            raise ConfigurationError("Line too short to get reference error , %s < %s "%(len(words),dline [Configuration.ERRORCOLKEY] ))
+                        dline['Error'] = float(words[ dline[Configuration.ERRORCOLKEY]-1 ])*float(dline['ValueRef'].rstrip())
+                    elif dline[Configuration.ERRORTYPEKEY] == "REL100" : 
+                        if dline[Configuration.ERRORCOLKEY] > len(words)  :
+                            raise ConfigurationError("Line too short to get reference error , %s < %s "%(len(words),dline [Configuration.ERRORCOLKEY] ))
+                        dline['Error'] = float(words[ dline[Configuration.ERRORCOLKEY]-1 ])*float(dline['ValueRef'].rstrip())/100.
+                    elif dline[Configuration.ERRORTYPEKEY] == "RELFIX" : 
+                        if dline[Configuration.ERRORCOLKEY] > len(words)  :
+                            raise ConfigurationError("Line too short to get reference error , %s < %s "%(len(words),dline [Configuration.ERRORCOLKEY] ))
+                        dline['Error'] = float(dline[Configuration.ERRORCOLKEY])*float(dline['ValueRef'].rstrip())
+                    else : 
+                        raise ConfigurationError("Error type is not valid: %s it should be 'ABS', 'REL', 'REL100' or 'RELFIX'"%dline[Configuration.ERRORTYPEKEY] )
+                    if dline['ErrorRef'] != 0 :
+                        nsig = (float(dline['Value'])-float(dline['ValueRef']))/float(dline['ErrorRef'])
+                    else :
+                        nsig = 0
+                    msg = self.getTextLineName(dline) + " VALUE= " + str(dline['Value']).rstrip() + " REF_VALUE= " + str(dline['ValueRef']).rstrip() + " REF_ERROR= " + str(dline['ErrorRef']).rstrip() + " : " + str(nsig)
+                    _logger.info(" TEXT LINE FOUND %s"%msg)
+                _logger.debug("ENDED checking dline %s "% dline)
+            _logger.debug("ENDED checking line %s "% line)
+
+        _logger.info("ENDED readTextFile()")
+                
+#t check line is not found twice
+
+    def getTextLineName(self,dline):
+        name = ""
+        dwords = dline[Configuration.WORDSKEY] 
+        for dwordk in dwords :
+#            name = name + str(dwordk) + " : " + str(dline[Configuration.WORDSKEY][dwordk]) + " | " 
+            name = name + str(dline[Configuration.WORDSKEY][dwordk]) + " "
+        return name
+
+    def getTextDefaultTest(self):
+        """
+        Returns default test
+        """
+        return self.text[Configuration.DEFAULTTESTKEY]
+
+    def getTextDefaultThresholds(self):
+        """
+        Return default thresholds
+        """
+        return self.text[Configuration.DEFAULTTHRESHOLDSKEY]
+
+    def getLines(self):
+        """
+        Return all histos configurations
+        """
+        return self.text[Configuration.LINESKEY]
+                
     def parseAndCheckUnBinned(self):
         """
         Check configuration for UnBinned distributions
@@ -205,7 +420,6 @@ class Configuration:
             if type(self.binned[Configuration.DEFAULTTHRESHOLDSKEY])!=type(list()) or \
                 len(self.binned[Configuration.DEFAULTTHRESHOLDSKEY])!=2:
                 raise ConfigurationError("Thresholds should be a list of size 2")
-
         if not self.binned.has_key(Configuration.HISTOSKEY):
             raise ConfigurationError("Binned block should have a %s variable"%Configuration.HISTOSKEY)
         if type(self.binned[Configuration.HISTOSKEY])!=type(list()):
@@ -231,7 +445,6 @@ class Configuration:
                     raise ConfigurationError("Key %s in histo element %s should be a boolean"%(Configuration.LOGYKEY,elem))
             else:
                 elem[Configuration.LOGYKEY] = False
-
         _logger.debug("Configuration syntax for '%s' checked and passed"%Configuration.BINNEDKEY) 
 
     def getConfigurationForHisto( self, name ):
@@ -241,7 +454,7 @@ class Configuration:
         import re
         for elem in self.binned[Configuration.HISTOSKEY]:
             #Histogram name can be regexp
-            if re.match("^%s$"%elem[Configuration.NAMEKEY],name):
+            if re.match("^%s$"%elem[Configuration.NAMEKEY],name) or elem[Configuration.NAMEKEY] == name :
                 return elem
         return None
     
@@ -281,7 +494,7 @@ class Configuration:
         """
         import re
         for elem in self.unbinned[Configuration.DATASETKEY]:
-            if re.match("^%s$"%elem[Configuration.NAMEKEY],name):
+            if re.match("^%s$"%elem[Configuration.NAMEKEY],name) or elem[Configuration.NAMEKEY] == name :
                 return elem
         return None
     
@@ -329,7 +542,11 @@ class Configuration:
         msg+="\n"
         return msg
 
-def runROOT( aConfigurationFile , aROOTFileName, doHistos = True , doUnBinned = True , doPlots = "report" , defaultReferenceFile = None , useColorsForOutput = False):
+
+
+_openRootFiles = []
+######################################################
+def runROOT( aConfigurationFile , aFileName, doText = False , doHistos = True , doUnBinned = True , doPlots = None , defaultReferenceFile = None , useColorsForOutput = False):
     """
     Run full analysis for a ROOT file.
     Configuraiton is specified in aConfiguraitonFile, the input ROOT file
@@ -337,7 +554,8 @@ def runROOT( aConfigurationFile , aROOTFileName, doHistos = True , doUnBinned = 
     """
     _logger.info("Preparing to run tests for run")
     _logger.info("Reading configuration from file: %s"%aConfigurationFile)
-    _logger.info("Inputs are contained in file: %s"%aROOTFileName)
+    _logger.info("Inputs are contained in file: %s"%aFileName)
+    _logger.info("Report in file: %s"%doPlots)
     conf = Configuration(aConfigurationFile)
     _logger.debug("Configuration is: %s"%conf)
     tfilecontent = []
@@ -345,14 +563,39 @@ def runROOT( aConfigurationFile , aROOTFileName, doHistos = True , doUnBinned = 
     #See: http://root.cern.ch/phpBB3/viewtopic.php?t=10902&p=46976
     import ROOT
     ROOT.gErrorIgnoreLevel = 1001
-    #Histograms part...
-    if doHistos:# or doUnBinned:
+
+    from sys import stdout,stderr
+    from ROOTIO import makePage
+
+    openpage = True
+    errcode = 0
+
+    #Text part...
+    if doText:
+        _logger.info("Processing text lines")
+        conf.parseAndCheckText()
+        _logger.debug("After parse ")
+        _logger.debug("REF FILE : %s"%defaultReferenceFile)
+        if defaultReferenceFile:
+            _logger.debug("Overwriting default reference files with %s"%defaultReferenceFile)
+            conf.text[Configuration.DEFAULTREFKEY]=defaultReferenceFile
+            conf.text[Configuration.REFERENCEKEY]=defaultReferenceFile
+        #Open ROOT file and get its content...
+        refFile = conf.text[Configuration.REFERENCEKEY]
+        _logger.debug("Before call reffile %s "%refFile)
+        conf.fillRefData(refFile)
+#        conf.fillRefData(conf.text[Configuration.REFERENCEKEY])
+        _logger.debug("After call reffile %s"%conf.text[Configuration.REFERENCEKEY])
+        conf.readTextFile( aFileName )
+    _logger.debug("READTEXTFILE CALLED")
+
+    if doHistos:
         _logger.info("Processing histograms")
         conf.parseAndCheckBinned()
     try:
         conf.binned
     except:
-        #disable because they do not exist in conf file
+        #Disable because they do not exist in conf file
         doHistos = False
     if doUnBinned:
         _logger.debug("Starting configuration of unbinned distributions")
@@ -363,18 +606,63 @@ def runROOT( aConfigurationFile , aROOTFileName, doHistos = True , doUnBinned = 
         #Disable because they do not exists in conf file
         doUnBinned = False
 
-    if doHistos or doUnBinned:
+    if not doHistos and not doUnBinned and not doText:
+        raise ConfigurationError("No 'Binned', 'UnBinned' or 'Text' configurations found in conf file")
+    if doHistos or doUnBinned:        
+#        if defaultReferenceFile:
+#            _logger.debug("Overwriting default reference files with %s"%defaultReferenceFile)
+#            conf.binned[Configuration.DEFAULTREFKEY]=defaultReferenceFile
         #Open ROOT file and get its content...
         from ROOT import TFile
         _logger.debug("Reading file content...")
-        tfile = TFile.Open( aROOTFileName )
+        tfile = TFile.Open( aFileName )
         import ROOTIO
         tfilecontent += ROOTIO.readDirectory( tfile )
         _logger.debug("Input file read. It contains %d objects"%len(tfilecontent))
-    else:
-        raise ConfigurationError("Neither 'Binned' or 'UnBinned' configurations found in conf file") 
+
     #This contains Algorithms objects
     theAlgorithms = []
+    if doText:
+        #Now loop on lines, store Algorithms to be executed
+        for dline in conf.text[Configuration.LINESKEY] :
+# only if dline was found in reference file
+             if dline.has_key(Configuration.VALUEKEY):
+                 _logger.debug("Configuration: %s"%dline)
+            #If test is not specified use default
+                 if not dline.has_key(Configuration.TESTNAMEKEY):
+                     _logger.debug("No test specified, using default")
+                     reftest=conf.getTextDefaultTest()
+                     if reftest == None:
+                         _logger.debug("No default specified, cannot continue")
+                         raise ConfigurationError("No test specified for: %s"%dline)
+                     dline[Configuration.TESTNAMEKEY]=reftest
+            #Create the ouput object to store result
+            #If threholds are specified, use them
+                 _logger.debug("Creating Result object with name: %s"%conf.getTextLineName(dline))
+            #If thresholds not specified use default
+                 if not dline.has_key(Configuration.THRESHOLDSKEY):
+                     _logger.debug("No thresholds specified, using default")
+                     refthre=conf.getTextDefaultThresholds()
+                     if refthre == None:
+                         _logger.debug("No default specified, cannot continue")
+                         raise Configuration("No thresholds specified for: %s"%hin)
+                     dline[Configuration.THRESHOLDSKEY]=refthre
+                 theResult = Output( name = conf.getTextLineName(dline) ,
+                                     failedThreshold = dline[Configuration.THRESHOLDSKEY][0] ,
+                                     passedThreshold = dline[Configuration.THRESHOLDSKEY][1])
+            #Now create Test object, it needs one line as input:
+                 from Tests import getTestByName
+                 _logger.debug("Creating test with name: %s"%dline[Configuration.TESTNAMEKEY])
+                 testClass = getTestByName( dline[Configuration.TESTNAMEKEY] )
+
+                 theTest = testClass( dline )
+            #Finally we can build the Algorithm object: a test with an output
+                 theAlgo = Algorithm( theTest , theResult )
+                 _logger.debug("Algorithm created %s"%theAlgo)
+                 theAlgorithms.append( theAlgo )
+                 #theAlgo.check()
+            #End of loops on input histograms
+
     if doHistos:
         if defaultReferenceFile:
             _logger.debug("Overwriting default reference files with %s"%defaultReferenceFile)
@@ -387,8 +675,9 @@ def runROOT( aConfigurationFile , aROOTFileName, doHistos = True , doUnBinned = 
             _logger.debug("Searching matches for: %s"%selection)
             mm=re.compile( "^%s$"%selection )
             for el in tfilecontent:
-                _logger.debug('Checking match for: %s agains selection: %s'%(el,selection))
-                if mm.match( el ):
+                _logger.debug('Checking match for: %s against selection: %s'%(el,selection))
+                if mm.match( el ) or el == selection:
+                    _logger.debug("Match found %s"%el)
                     selectedHistos.append( el )
         #Build IO.Histogram objects for all selected histograms
         _logger.debug("Histograms matching selections in configuration file: %d"%len(selectedHistos))
@@ -427,6 +716,9 @@ def runROOT( aConfigurationFile , aROOTFileName, doHistos = True , doUnBinned = 
             _logger.debug("Final configuration for object: %s"%cc)
             #Create the ouput object to store result
             #If threholds are specified, use them
+            #for algo in theAlgorithms:
+            #    _logger.info("loop algo pre1.. %s", algo.test.dataset1) # GDEB
+            #    _logger.info("loop algo pre1.. %s", algo.test.dataset2) # GDEB
             _logger.debug("Creating Result object with name: %s"%hin.name)
             theResult = Output( name = hin.name ,
                                 failedThreshold = cc[Configuration.THRESHOLDSKEY][0] ,
@@ -435,25 +727,29 @@ def runROOT( aConfigurationFile , aROOTFileName, doHistos = True , doUnBinned = 
                                 logy = cc[Configuration.LOGYKEY])
             #Now create Test object, it needs two histograms as input:
             # The actual histogram to be checked (hold by Input object)
-
             # and a reference histogram in the reference TFile
             from Tests import getTestByName
             _logger.debug("Creating test with name: %s"%cc[Configuration.TESTNAMEKEY])
             testClass = getTestByName( cc[Configuration.TESTNAMEKEY] )
             hobj = hin.getObject()
-            #Get reference: same name as input
+            #for algo in theAlgorithms:
+            #    _logger.info("loop algo pre2.. %s", algo.test.dataset1) # GDEB
+            #    _logger.info("loop algo pre2.. %s", algo.test.dataset2)  # GDEB
+           #Get reference: same name as input
             _logger.debug("Reading reference from reference file")
             fref = TFile.Open( cc[Configuration.REFERENCEKEY] )
+            _openRootFiles.append(fref) #Force ROOT files to remain open, otherwise histos may be deleted
+            #for algo in theAlgorithms:
+            #    _logger.info("loop algo pre3.. %s", algo.test.dataset1) # GDEB
+            #    _logger.info("loop algo pre3.. %s", algo.test.dataset2) # GDEB
             _logger.debug("Reference file is: %s (%s)"%(fref.GetName(),fref))
             href = fref.Get( hin.name )
-            _logger.debug("Reference object: %s"%href)
+            _logger.info("Reference object: %s"%href)
             theTest = testClass( hobj, href )
             #Finally we can build the Algorithm object: a test with an output
             theAlgo = Algorithm( theTest , theResult )
             _logger.debug("Algorithm created %s"%theAlgo)
             theAlgorithms.append( theAlgo )
-            #End of loops on input histograms
-    #Process configuration for unbinned distributions
     if doUnBinned:
         if defaultReferenceFile:
             _logger.debug("Overwriting default reference files with %s"%defaultReferenceFile)
@@ -547,6 +843,7 @@ def runROOT( aConfigurationFile , aROOTFileName, doHistos = True , doUnBinned = 
             theAlgo = Algorithm( theTest , theResult )
             _logger.debug("Algorithm created %s"%theAlgo)
             theAlgorithms.append( theAlgo )
+            #theAlgo.check()
     _logger.info("Configuration done, a total of %d Algorithms have been created"%len(theAlgorithms))
     _logger.info("Executing ...")
     [ algo.check() for algo in theAlgorithms ]
@@ -560,6 +857,7 @@ def runROOT( aConfigurationFile , aROOTFileName, doHistos = True , doUnBinned = 
         stdout.write(" ")
         errcode += algo.output.pprint( stdout ,colors= useColorsForOutput )
         stdout.write(" (Test: %s)"%(algo.test.__class__.__name__))
+        stdout.write(" (pval= %s)"%algo.output.value)
         stdout.write("\n")
         if doPlots != None:
             if openpage:
@@ -576,7 +874,7 @@ def runROOT( aConfigurationFile , aROOTFileName, doHistos = True , doUnBinned = 
         t1.SetTextColor(kRed)
         t1.SetTextSize(0.02)
         t1.Draw()
-        t2=TText(0.05,0.6,"Input: "+aROOTFileName)
+        t2=TText(0.05,0.6,"Input: "+aFileName)
         t2.SetTextSize(0.02)
         t2.SetTextColor(kBlue)
         t2.Draw()

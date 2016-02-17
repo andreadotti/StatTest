@@ -27,6 +27,10 @@ add this in the documentation for the changed file as [BUGFIX #BUGNUMBER].
      * Reverse chronological order (last date on top), please *
      ----------------------------------------------------------
 
+9/12/2015 Andrea Dotti    (stattest-V10-02-00)
+Adding new functionalitt for TEXT output files 
+from P. Arce
+
 18/02/2015 Andrea Dotti   (stattest-V10-01-00)
 For merged file, name is now random to allow
 for multiple tests to run in the same directory

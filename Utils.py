@@ -70,7 +70,10 @@ def makeResiduals( h1 , h2 ):
             res = (bin1-nexp1)/sqrt(nexp1)
             #Habermann correction for residuals
             correc = (1.-sum1/sum)*(1.-binsum/sum)
-            res /= sqrt(correc)
+            if correc != 0 :
+                res /= sqrt(correc)
+            else:
+                print("NOT APPLYING Habermann correction for residuals %s"%correc)
             hres.SetBinContent( bin, res )
     return hres
     
@@ -125,3 +128,21 @@ class NotYet(Error):
 
         #import Interface
         #import Tests
+
+def SplitLine(line) :
+
+    line = line.lstrip()
+    wordst = line.split("\t")  
+#    words = []
+#    for word in wordst :
+#        if word != "" :
+#            words.append(word)
+    wordst = line.split(" ")    
+    words = []
+    for word in wordst :
+        wordst2 = word.split("\t")        
+        for word2 in wordst2 :
+            if word2 != "" :
+                words.append(word2)
+
+    return words

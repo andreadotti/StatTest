@@ -1,3 +1,4 @@
+#include "Math/ProbFuncMathCore.h"
 """
 Created on March 2012
 
@@ -38,7 +39,16 @@ class StatTest:
         self.dataType = dataType
         self.dataset1 = data1
         self.dataset2 = data2
+#        print("IN INIT DATASET %s"%self.dataset2)
         self.cached = False
+#    def __init__(self,data1):
+#        """
+#        Create a new test for the specified iunputs of
+#        type data type.
+#        Values are cached.
+#        """
+#        self.dataset1 = data1
+#        self.cached = False
     def calc( self ):
         """
         If needed perform the
@@ -138,6 +148,9 @@ class Binned1DChi2Test(StatTest):
             raise ZeroDoF(self.dataset1.GetName())
         self.localchi2 = chi2[0]
         self.localndf  = ndf[0]
+#        print("Binned1DChi2Test %s pval %s"%(self.dataset1.GetName(),self.localpval))
+#        print("Binned1DChi2Test %s chi2 %s"%(self.dataset1.GetName(),self.localchi2))
+#        print("Binned1DChi2Test %s ndf %s"%(self.dataset1.GetName(),self.localndf))
         for binidx in range(0,mysize):
             self.residuals.SetBinContent( binidx+1, myres[binidx] )
         return self.localpval
@@ -191,7 +204,7 @@ class KolmogorovSmirnovTest(StatTest):
     """
     def __init__(self,d1,d2,dataType=DataType.UNBINNED):
         if dataType == DataType.BINNED1D:
-            print 'WARNING: Using test on binned distributions'
+#t            print 'WARNING: Using test on binned distributions'
             first = d1 #getFrom1DHistogram( d1 )
             second= d2 #getFrom1DHistogram( d2 )
         elif dataType == DataType.UNBINNED:
@@ -210,12 +223,25 @@ class KolmogorovSmirnovTest(StatTest):
         if self.dataType == DataType.UNBINNED:
             return self.gof.KolmogorovSmirnov2SamplesTest("p")
         else:
-            return self.dataset1.KolmogorovTest( self.dataset2 ,"D")
+#            print("DATASET1 %s"%self.dataset1)
+#            print("DATASET2 %s"%self.dataset2)
+#            print("DATASET1 %s DATASET2 %s"%(self.dataset1.GetEntries(),self.dataset2.GetEntries()))
+#            print("DATASET1 %s DATASET2 %s"%(self.dataset1.Integral(),self.dataset2.Integral()))
+            if self.dataset1.Integral() == 0 and self.dataset2.Integral() == 0:
+                return 1.
+            elif self.dataset1.Integral() != 0 and self.dataset2.Integral() == 0:
+                return 0.
+            elif self.dataset1.Integral() == 0 and self.dataset2.Integral() != 0:
+                return 0.
+            else:
+#G no debugging                return self.dataset1.KolmogorovTest( self.dataset2 ,"D")
+               return self.dataset1.KolmogorovTest( self.dataset2 ,"")
     def _stat(self):
-        if self.dataType == DataType.UNBINNED:
-            return self.gof.KolmogorovSmirnov2SamplesTest("t")
-        else:
-            return self.dataset1.KolmogorovTest( self.dataset2 ,"M")
+        return self._pval()
+#G        if self.dataType == DataType.UNBINNED:
+#G            return self.gof.KolmogorovSmirnov2SamplesTest("t")
+#G        else:
+#G            return self.dataset1.KolmogorovTest( self.dataset2 ,"M")
         
 class BinnedKolmogorovSmirnovTest(KolmogorovSmirnovTest):
     def __init__(self,h1,h2):
@@ -225,7 +251,6 @@ def testme():
     """
     Example function
     """
-    from ROOT import TH1F
     h1 = TH1F("h1","h",100,-10,10)
     h2 = TH1F("h2","h",100,-10,10)
     h1.FillRandom("gaus")
@@ -240,6 +265,39 @@ def testme():
     binned = KolmogorovSmirnovTest( h1 , h2, DataType.BINNED1D)
     print 'For KS: ',binned.pval()
 
+class NormalCDF(StatTest):
+    """
+    Normal Cumulative Distribution Function Test.
+    """
+    def __init__(self,d1):
+        StatTest.__init__(self,d1,d1,"")
+    def value(self):
+        return self.pval()
+    def _ndf(self):
+        return 0
+    def _pval(self):
+# Get number of sigmas
+        import math
+        if self.dataset1['ErrorRef'] != 0 :
+            nsig = (float(self.dataset1['Value']) - float(self.dataset1['ValueRef']))/float(self.dataset1['ErrorRef']) 
+        else:
+            if float(self.dataset1['Value']) - float(self.dataset1['ValueRef']) != 0 :
+                print ("Error Ref is 0, ValueRef = %s , Value = %s"%(self.dataset1['Value'],self.dataset1['ValueRef']))
+            nsig = 0
+#    'Cumulative distribution function for the standard normal distribution'
+        pval = 2.*(1.0 + math.erf(-math.fabs(nsig) / math.sqrt(2.0))) / 2.0
+#        print "NormalCDF _pval : %s -> %s"%(nsig,pval)
+        return pval
+    def _stat(self):
+# Get number of sigmas
+        return self._pval()
+#import math
+#        nsig = (float(self.dataset1['Value']) - float(self.dataset1['ValueRef']))/float(self.dataset1['ErrorRef']) 
+##    'Cumulative distribution function for the standard normal distribution'
+#        pval = (1.0 + math.erf(-nsig / math.sqrt(2.0))) / 2.0
+#        print "NormalCDF _stat : %s -> %s"%(nsig,pval)
+#        return pval
+
 
 _testsMap = {
         "BinnedAndersonDarlingTest" : BinnedAndersonDarlingTest,
@@ -247,7 +305,8 @@ _testsMap = {
         "Binned1DChi2Test" : Binned1DChi2Test,
         "BinnedWeighted1DChi2Test" : BinnedWeighted1DChi2Test,
         "BinnedKolmogorovSmirnovTest" : BinnedKolmogorovSmirnovTest,
-        "KolmogorovSmirnovTest" : KolmogorovSmirnovTest
+        "KolmogorovSmirnovTest" : KolmogorovSmirnovTest,
+        "NormalCDF" : NormalCDF
         }
 
 def getTestByName( name ):
